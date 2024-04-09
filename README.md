@@ -15,6 +15,8 @@ CREATE TABLE backtest_data (
 
 Grafana query to create table
 
+Add sql data source and then enter below query in console creator
+
 SELECT 
     stock,
     buy_price,
