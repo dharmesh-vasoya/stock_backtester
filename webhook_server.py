@@ -4,7 +4,10 @@ import requests
 from flask_sqlalchemy import SQLAlchemy
 import pytz
 from datetime import datetime
-
+import logging
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:changeme@localhost/database_name'
@@ -22,7 +25,8 @@ def login():
         client_id = "5ff3dc0a-92d4-4018-8c07-f68e9d170bb5"
         redirect_uri = "https://lepidusdexter.in:5555/auth_callback"  # Update with your domain
         state = "optional-state-value"
-        auth_url = f"https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&state={state}"
+        auth_url = f"https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}"
+        logger.debug("Redirecting to Upstox authentication page")
         return redirect(auth_url)
     else:
         return jsonify({'message': 'Already logged in'})
@@ -31,13 +35,18 @@ def login():
 @app.route('/auth_callback')
 def auth_callback():
     global access_token
-    print(request.args)
+    logger.debug("Received authentication callback")
     auth_code = request.args.get('code')
     client_id = "5ff3dc0a-92d4-4018-8c07-f68e9d170bb5"
     client_secret = "tfzgjybh6b"
-    redirect_uri = "https://lepidusdexter.in:3000"  # Update with your domain
+    redirect_uri = "https://lepidusdexter.in:5555/auth_callback"  # Update with your domain
 
     token_url = "https://api.upstox.com/v2/login/authorization/token"
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
     token_data = {
         "code": auth_code,
         "client_id": client_id,
@@ -45,25 +54,70 @@ def auth_callback():
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code"
     }
-    print(token_data)
-    response = requests.post(token_url, data=token_data)
+    logger.debug("Sending POST request to token URL")
+    logger.debug(f"Token data: {token_data}")
+    response = requests.post(token_url, headers=headers, data=token_data)
+    logger.debug(f"Response status code: {response.status_code}")
+    logger.debug(f"Response text: {response.text}")
+
     # Check if the request was successful
     if response.status_code == 200:
         # Parse the JSON response
         access_token = response.json().get('access_token')
+        logger.info("Access token received successfully")
         return jsonify({'access_token': access_token}), 200
     else:
         # If there was an error, return the error message
-        return jsonify({'error': 'Failed to generate access token'}), response.status_code
+        error_message = f"Failed to generate access token. Status code: {response.status_code}"
+        logger.error(error_message)
+        return jsonify({'error': error_message}), response.status_code
 
-@app.route('/protected')
-def protected():
+
+@app.route('/get_reliance_ltp')
+def get_reliance_ltp():
     global access_token
-    if access_token is not None:
-        # Use the access token to make authenticated API calls
-        return jsonify({'message': 'Authenticated', 'access_token': access_token})
+    if access_token is None:
+        logger.error("Access token not available. Please log in first.")
+        return jsonify({'error': 'Access token not available. Please log in first.'}), 401
+
+    # Define the URL for LTP quotes API
+    ltp_url = "https://api.upstox.com/v2/market-quote/quotes"
+
+    # Instrument key for Reliance (Example, you might need to get the correct instrument key)
+    instrument_key = "NSE_EQ|RELIANCE"
+
+    # Set headers
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/json'
+    }
+
+    # Set query parameters
+    params = {
+        'instrument_key': instrument_key
+    }
+
+    # Make GET request to get LTP
+    response = requests.get(ltp_url, headers=headers, params=params)
+
+    logger.debug(f"Request URL: {response.url}")
+    logger.debug(f"Response status code: {response.status_code}")
+    logger.debug(f"Response text: {response.text}")
+
+    if response.status_code == 200:
+        ltp_data = response.json().get('data', {}).get(instrument_key, {})
+        if ltp_data:
+            ltp = ltp_data.get('last_price')
+            logger.info(f"LTP for Reliance: {ltp}")
+            return jsonify({'reliance_ltp': ltp}), 200
+        else:
+            logger.error("Failed to retrieve LTP data for Reliance.")
+            return jsonify({'error': 'Failed to retrieve LTP data for Reliance.'}), 500
     else:
-        return jsonify({'message': 'Unauthorized'}), 401
+        logger.error(f"Failed to fetch LTP for Reliance. Status code: {response.status_code}")
+        return jsonify({'error': 'Failed to fetch LTP for Reliance.'}), response.status_code
+
+
 
 def to_epoch(time_string):
     # Get current time in IST
