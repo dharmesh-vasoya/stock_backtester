@@ -1,4 +1,6 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect  # Add 'redirect' to the import statement
+import requests
+
 from flask_sqlalchemy import SQLAlchemy
 import pytz
 from datetime import datetime
@@ -8,6 +10,60 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:changeme@localhost/database_name'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+access_token = None
+
+# Login API
+@app.route('/login')
+def login():
+    global access_token
+    if access_token is None:
+        # Redirect to Upstox authentication page
+        client_id = "5ff3dc0a-92d4-4018-8c07-f68e9d170bb5"
+        redirect_uri = "https://lepidusdexter.in:5555/auth_callback"  # Update with your domain
+        state = "optional-state-value"
+        auth_url = f"https://api.upstox.com/v2/login/authorization/dialog?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&state={state}"
+        return redirect(auth_url)
+    else:
+        return jsonify({'message': 'Already logged in'})
+
+# Callback API
+@app.route('/auth_callback')
+def auth_callback():
+    global access_token
+    print(request.args)
+    auth_code = request.args.get('code')
+    client_id = "5ff3dc0a-92d4-4018-8c07-f68e9d170bb5"
+    client_secret = "tfzgjybh6b"
+    redirect_uri = "https://lepidusdexter.in:3000"  # Update with your domain
+
+    token_url = "https://api.upstox.com/v2/login/authorization/token"
+    token_data = {
+        "code": auth_code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code"
+    }
+    print(token_data)
+    response = requests.post(token_url, data=token_data)
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the JSON response
+        access_token = response.json().get('access_token')
+        return jsonify({'access_token': access_token}), 200
+    else:
+        # If there was an error, return the error message
+        return jsonify({'error': 'Failed to generate access token'}), response.status_code
+
+@app.route('/protected')
+def protected():
+    global access_token
+    if access_token is not None:
+        # Use the access token to make authenticated API calls
+        return jsonify({'message': 'Authenticated', 'access_token': access_token})
+    else:
+        return jsonify({'message': 'Unauthorized'}), 401
 
 def to_epoch(time_string):
     # Get current time in IST
@@ -88,8 +144,10 @@ def process_sell_signal(data):
                 app.logger.debug(f"Sell entry updated in database")
 
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True, port=5555, host='0.0.0.0')
+def start_flask_app():
+    #app.run(debug=True, port=5555, host='0.0.0.0')
+    app.run(debug=True, port=5555, host='0.0.0.0', ssl_context=('fullchain.pem', 'privkey.pem'))
 
+
+if __name__ == '__main__':
+    start_flask_app()
