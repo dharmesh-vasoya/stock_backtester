@@ -30,8 +30,13 @@ FROM
 
 to delete old data
 
--- Step 1: Drop the existing table if it exists
-DROP TABLE IF EXISTS backtest_data;
+
+MariaDB [(none)]> use database_name
+
+Database changed
+MariaDB [database_name]> DROP TABLE IF EXISTS backtest_data;
+
+MariaDB [database_name]> exit
 
 
 
