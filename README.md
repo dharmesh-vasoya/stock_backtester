@@ -1,4 +1,11 @@
 install mysql
+
+open console
+mysql -u root -p
+
+select db
+use database_name
+
 create db with database_name
 
 Create the table with required fields
@@ -10,7 +17,8 @@ CREATE TABLE backtest_data (
     buy_time_human VARCHAR(50),
     buy_time_epoch INT,
     sell_time_human VARCHAR(50),
-    sell_time_epoch INT
+    sell_time_epoch INT,
+    pnl FLOAT
 );
 
 Grafana query to create table
@@ -22,21 +30,27 @@ SELECT
     buy_price,
     buy_time_human AS buy_time,
     sell_price,
-    sell_time_human AS sell_time
+    sell_time_human AS sell_time,
+    pnl
 FROM 
     backtest_data;
 
+Show the list of tables:
+SHOW TABLES;
+
+to see table content
+SELECT * FROM backtest_data;
 
 
 to delete old data
 
+-- Step 1: Drop the existing table if it exists
 
-MariaDB [(none)]> use database_name
+select db 
+use database_name
 
-Database changed
-MariaDB [database_name]> DROP TABLE IF EXISTS backtest_data;
-
-MariaDB [database_name]> exit
+to delete
+DROP TABLE IF EXISTS backtest_data;
 
 
 
