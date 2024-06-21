@@ -1,11 +1,26 @@
 from flask import Flask, request, jsonify, redirect  # Add 'redirect' to the import statement
-import requests
+import requests, os
 
 from flask_sqlalchemy import SQLAlchemy
 import pytz
 from datetime import datetime
 import logging
 # Set up logging
+# Generate log file name based on current date and time
+log_file = datetime.now().strftime("webhook_server_%Y-%m-%d_%H-%M-%S.log")
+
+# Ensure the log directory exists
+log_directory = 'logs'
+os.makedirs(log_directory, exist_ok=True)
+log_path = os.path.join(log_directory, log_file)
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(message)s',
+                    handlers=[
+                        logging.FileHandler(log_path),
+                        logging.StreamHandler()
+                    ])
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -145,6 +160,7 @@ class BacktestData(db.Model):
     buy_time_epoch = db.Column(db.Integer, nullable=False)  # Epoch time
     sell_time_human = db.Column(db.String(50))  # Human-readable time with IST date
     sell_time_epoch = db.Column(db.Integer)  # Epoch time
+    pnl = db.Column(db.Float)
 
 
 @app.route('/webhook', methods=['POST'])
@@ -197,6 +213,11 @@ def process_sell_signal(data):
                 db.session.commit()
                 app.logger.debug(f"Sell entry updated in database")
 
+                pnl_percentage = ((sell_price - sell_entry.buy_price) / sell_entry.buy_price) * 100
+                sell_entry.pnl = pnl_percentage
+                db.session.commit()
+                app.logger.debug(f"Sell entry updated in database with PnL: {sell_entry.pnl}")
+
 
 def start_flask_app():
     #app.run(debug=True, port=5555, host='0.0.0.0')
@@ -205,3 +226,4 @@ def start_flask_app():
 
 if __name__ == '__main__':
     start_flask_app()
+
